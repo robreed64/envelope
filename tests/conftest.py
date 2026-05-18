@@ -28,10 +28,8 @@ def setup_database():
 def clean_db():
     """Truncate all tables before each test for isolation."""
     with engine.connect() as conn:
-        conn.execute(text(
-            "TRUNCATE transactions, periods, envelopes, "
-            "household_members, households, refresh_tokens, users"
-        ))
+        tables = ", ".join(Base.metadata.tables.keys())
+        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
         conn.commit()
     yield
 

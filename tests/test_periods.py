@@ -23,7 +23,7 @@ def test_month_is_normalized_to_first_of_month(client, headers, household, envel
     assert r.json()["month"] == "2026-05-01"
 
 
-def test_duplicate_period_returns_409(client, headers, household, envelope):
+def test_duplicate_period_updates_allocation(client, headers, household, envelope):
     payload = {"month": "2026-06-01", "allocated": "100.00"}
     client.post(
         f"/households/{household['id']}/envelopes/{envelope['id']}/periods",
@@ -32,10 +32,11 @@ def test_duplicate_period_returns_409(client, headers, household, envelope):
     )
     r = client.post(
         f"/households/{household['id']}/envelopes/{envelope['id']}/periods",
-        json=payload,
+        json={"month": "2026-06-01", "allocated": "200.00"},
         headers=headers,
     )
-    assert r.status_code == 409
+    assert r.status_code == 200
+    assert r.json()["allocated"] == "200.00"
 
 
 def test_new_period_starts_with_zero_spent(client, headers, household, envelope, period):
