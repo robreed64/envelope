@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -84,11 +84,12 @@ def _enrich(period: Period, db: Session) -> PeriodSummary:
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
-@router.post("", response_model=PeriodResponse)
+@router.post("", response_model=PeriodResponse, status_code=status.HTTP_201_CREATED)
 def create_period(
     household_id: uuid.UUID,
     envelope_id: uuid.UUID,
     body: PeriodCreate,
+    response: Response,
     _: HouseholdMember = Depends(require_household_role(["owner", "editor"])),
     db: Session = Depends(get_db),
 ):
@@ -99,6 +100,7 @@ def create_period(
         existing.allocated = body.allocated
         db.commit()
         db.refresh(existing)
+        response.status_code = status.HTTP_200_OK
         return existing
     rollover = _live_rollover(db, envelope_id, month)
     period = Period(envelope_id=envelope_id, month=month, allocated=body.allocated, rollover=rollover)
