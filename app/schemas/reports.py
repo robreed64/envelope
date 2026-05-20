@@ -18,6 +18,15 @@ class SpendingRow(BaseModel):
     total: Decimal
 
 
+class AccountGroup(BaseModel):
+    account_id: uuid.UUID | None
+    account_name: str | None
+    rows: list[SpendingRow]
+    monthly_totals: list[Decimal]
+    total: Decimal
+
+
 class SpendingReport(BaseModel):
     months: list[str]
     rows: list[SpendingRow]
+    account_groups: list[AccountGroup]

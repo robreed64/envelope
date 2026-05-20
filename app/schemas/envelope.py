@@ -23,6 +23,7 @@ class EnvelopeUpdate(BaseModel):
     envelope_type: str | None = None
     income_pct_target: float | None = None
     is_protected: bool | None = None
+    funding_account_id: uuid.UUID | None = None
 
 
 class EnvelopeResponse(BaseModel):
@@ -37,6 +38,7 @@ class EnvelopeResponse(BaseModel):
     envelope_type: str | None
     income_pct_target: float | None
     is_protected: bool
+    funding_account_id: uuid.UUID | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
