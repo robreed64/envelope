@@ -4,6 +4,8 @@ import { createPeriod, updatePeriod } from '../api/periods'
 import { updateEnvelope } from '../api/envelopes'
 import { fmt, ENVELOPE_TYPES } from '../utils'
 
+const TYPE_ORDER = ['needs', 'wants', 'dreams', 'fix', 'emergency']
+
 export default function BudgetTable({ envelopes, periodByEnvelope, householdId, month, totalIncome = 0 }) {
   const qc = useQueryClient()
   const [drafts, setDrafts] = useState({})
@@ -82,13 +84,12 @@ export default function BudgetTable({ envelopes, periodByEnvelope, householdId, 
   })
 
   const groupMap = {}
-  const seenOrder = []
   for (const env of envelopes) {
-    const g = env.group_name || ''
-    if (!groupMap[g]) { groupMap[g] = []; seenOrder.push(g) }
+    const g = env.envelope_type || ''
+    if (!groupMap[g]) groupMap[g] = []
     groupMap[g].push(env)
   }
-  const groups = [...seenOrder.filter(Boolean), '']
+  const groups = [...TYPE_ORDER, '']
     .filter((g) => groupMap[g]?.length)
     .map((g) => {
       const items = groupMap[g]
@@ -140,7 +141,10 @@ export default function BudgetTable({ envelopes, periodByEnvelope, householdId, 
                 >
                   <td className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-widest">
                     <span className="mr-1.5 text-[10px]">{collapsedGroups.has(group) ? '▶' : '▼'}</span>
-                    {group}
+                    {ENVELOPE_TYPES[group]
+                      ? <><span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${ENVELOPE_TYPES[group].dot}`} />{ENVELOPE_TYPES[group].label}</>
+                      : 'Uncategorized'
+                    }
                   </td>
                   <td />
                   <td className="px-4 py-1.5 text-right text-xs font-semibold text-gray-400 tabular-nums">{fmt(gAllocated)}</td>
