@@ -43,8 +43,14 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
+const VIEW_OPTIONS = [
+  { label: 'By Envelope', value: 'envelope' },
+  { label: 'By Account', value: 'account' },
+]
+
 export default function Reports() {
   const [range, setRange] = useState(6)
+  const [view, setView] = useState('envelope')
   const [exportStart, setExportStart] = useState(`${new Date().getFullYear()}-01-01`)
   const [exportEnd, setExportEnd] = useState(today())
   const [exporting, setExporting] = useState(false)
@@ -97,18 +103,33 @@ export default function Reports() {
           <h1 className="text-2xl font-bold text-gray-900">Spending Reports</h1>
           <p className="text-gray-500 text-sm">Spending by envelope over time</p>
         </div>
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setRange(opt.value)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                range === opt.value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex gap-2">
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            {VIEW_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setView(opt.value)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  view === opt.value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            {RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setRange(opt.value)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  range === opt.value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -162,75 +183,141 @@ export default function Reports() {
           </div>
 
           {/* Breakdown table */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Breakdown</h2>
-              <span className="text-sm text-gray-400">Total: <span className="font-semibold text-gray-700">{fmt(grandTotal)}</span></span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-50">
-                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-40">Envelope</th>
-                    {report.months.map((m) => (
-                      <th key={m} className="text-right px-3 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                        {shortMonth(m)}
-                      </th>
+          {view === 'envelope' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Breakdown</h2>
+                <span className="text-sm text-gray-400">Total: <span className="font-semibold text-gray-700">{fmt(grandTotal)}</span></span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-50">
+                      <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-40">Envelope</th>
+                      {report.months.map((m) => (
+                        <th key={m} className="text-right px-3 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                          {shortMonth(m)}
+                        </th>
+                      ))}
+                      <th className="text-right px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {sortedRows.map((row) => (
+                      <tr key={row.envelope_id} className="hover:bg-gray-50">
+                        <td className="px-5 py-3 font-medium text-gray-800 whitespace-nowrap">
+                          {row.group_name && <span className="text-gray-400 text-xs mr-1">{row.group_name} /</span>}
+                          <span style={{ color: BAR_COLORS[envelopeKeys.indexOf(row.envelope_name) % BAR_COLORS.length] }}>■</span>
+                          {' '}{row.envelope_name}
+                        </td>
+                        {row.monthly.map((cell) => {
+                          const over = parseFloat(cell.allocated) > 0 && parseFloat(cell.spent) > parseFloat(cell.allocated)
+                          const hasData = parseFloat(cell.spent) > 0
+                          return (
+                            <td key={cell.month} className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
+                              {hasData ? (
+                                <span className={over ? 'text-rose-600 font-medium' : 'text-gray-700'}>{fmt(cell.spent)}</span>
+                              ) : (
+                                <span className="text-gray-200">—</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                        <td className="px-5 py-3 text-right font-semibold text-gray-900 tabular-nums whitespace-nowrap">{fmt(row.total)}</td>
+                      </tr>
                     ))}
-                    <th className="text-right px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {sortedRows.map((row, ri) => (
-                    <tr key={row.envelope_id} className="hover:bg-gray-50">
-                      <td className="px-5 py-3 font-medium text-gray-800 whitespace-nowrap">
-                        {row.group_name && <span className="text-gray-400 text-xs mr-1">{row.group_name} /</span>}
-                        <span style={{ color: BAR_COLORS[envelopeKeys.indexOf(row.envelope_name) % BAR_COLORS.length] }}>
-                          ■
-                        </span>
-                        {' '}{row.envelope_name}
-                      </td>
-                      {row.monthly.map((cell) => {
-                        const over = parseFloat(cell.allocated) > 0 && parseFloat(cell.spent) > parseFloat(cell.allocated)
-                        const hasData = parseFloat(cell.spent) > 0
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-gray-100 bg-gray-50">
+                      <td className="px-5 py-3 font-semibold text-gray-700">Total</td>
+                      {report.months.map((m) => {
+                        const monthTotal = (report.rows ?? []).reduce((s, row) => {
+                          const cell = row.monthly.find((c) => c.month === m)
+                          return s + (cell ? parseFloat(cell.spent) : 0)
+                        }, 0)
                         return (
-                          <td key={cell.month} className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
-                            {hasData ? (
-                              <span className={over ? 'text-rose-600 font-medium' : 'text-gray-700'}>
-                                {fmt(cell.spent)}
-                              </span>
-                            ) : (
-                              <span className="text-gray-200">—</span>
-                            )}
+                          <td key={m} className="px-3 py-3 text-right font-semibold text-gray-700 tabular-nums whitespace-nowrap">
+                            {fmt(monthTotal)}
                           </td>
                         )
                       })}
-                      <td className="px-5 py-3 text-right font-semibold text-gray-900 tabular-nums whitespace-nowrap">
-                        {fmt(row.total)}
-                      </td>
+                      <td className="px-5 py-3 text-right font-bold text-gray-900 tabular-nums">{fmt(grandTotal)}</td>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-gray-100 bg-gray-50">
-                    <td className="px-5 py-3 font-semibold text-gray-700">Total</td>
-                    {report.months.map((m) => {
-                      const monthTotal = (report.rows ?? []).reduce((s, row) => {
-                        const cell = row.monthly.find((c) => c.month === m)
-                        return s + (cell ? parseFloat(cell.spent) : 0)
-                      }, 0)
-                      return (
-                        <td key={m} className="px-3 py-3 text-right font-semibold text-gray-700 tabular-nums whitespace-nowrap">
-                          {fmt(monthTotal)}
-                        </td>
-                      )
-                    })}
-                    <td className="px-5 py-3 text-right font-bold text-gray-900 tabular-nums">{fmt(grandTotal)}</td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </tfoot>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
+
+          {view === 'account' && (
+            <div className="space-y-4">
+              {(report.account_groups ?? []).length === 0 && (
+                <div className="text-sm text-gray-400 text-center py-8">
+                  No accounts assigned yet. Open an envelope and set "Funded by" to group spending here.
+                </div>
+              )}
+              {(report.account_groups ?? []).map((group) => (
+                <div key={group.account_id ?? 'unassigned'} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 border-b border-gray-50 flex items-center justify-between bg-gray-50">
+                    <h2 className="text-sm font-semibold text-gray-700">
+                      {group.account_name ?? <span className="text-gray-400 italic">Unassigned</span>}
+                    </h2>
+                    <span className="text-sm text-gray-400">Total: <span className="font-semibold text-gray-700">{fmt(group.total)}</span></span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-50">
+                          <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide w-40">Envelope</th>
+                          {report.months.map((m) => (
+                            <th key={m} className="text-right px-3 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                              {shortMonth(m)}
+                            </th>
+                          ))}
+                          <th className="text-right px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {group.rows.map((row) => (
+                          <tr key={row.envelope_id} className="hover:bg-gray-50">
+                            <td className="px-5 py-3 font-medium text-gray-800 whitespace-nowrap">
+                              {row.group_name && <span className="text-gray-400 text-xs mr-1">{row.group_name} /</span>}
+                              {row.envelope_name}
+                            </td>
+                            {row.monthly.map((cell) => {
+                              const over = parseFloat(cell.allocated) > 0 && parseFloat(cell.spent) > parseFloat(cell.allocated)
+                              const hasData = parseFloat(cell.spent) > 0
+                              return (
+                                <td key={cell.month} className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
+                                  {hasData ? (
+                                    <span className={over ? 'text-rose-600 font-medium' : 'text-gray-700'}>{fmt(cell.spent)}</span>
+                                  ) : (
+                                    <span className="text-gray-200">—</span>
+                                  )}
+                                </td>
+                              )
+                            })}
+                            <td className="px-5 py-3 text-right font-semibold text-gray-900 tabular-nums whitespace-nowrap">{fmt(row.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t border-gray-100 bg-gray-50">
+                          <td className="px-5 py-3 font-semibold text-gray-700">{group.account_name ?? 'Unassigned'} total</td>
+                          {group.monthly_totals.map((t, i) => (
+                            <td key={i} className="px-3 py-3 text-right font-semibold text-gray-700 tabular-nums whitespace-nowrap">
+                              {fmt(t)}
+                            </td>
+                          ))}
+                          <td className="px-5 py-3 text-right font-bold text-gray-900 tabular-nums">{fmt(group.total)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 

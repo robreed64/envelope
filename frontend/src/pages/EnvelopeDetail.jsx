@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Layout from '../components/Layout'
 import MonthNav from '../components/MonthNav'
 import { getEnvelopes, updateEnvelope } from '../api/envelopes'
+import { getAccounts } from '../api/accounts'
 import { getPeriods, createPeriod, updatePeriod } from '../api/periods'
 import { getTransactions, createTransaction, updateTransaction, deleteTransaction, deleteTransfer, deleteSplit } from '../api/transactions'
 import { getPayeeAliases, upsertPayeeAlias, deletePayeeAlias } from '../api/payees'
@@ -55,6 +56,11 @@ export default function EnvelopeDetail() {
   const { data: envelopes = [] } = useQuery({
     queryKey: ['envelopes', householdId],
     queryFn: () => getEnvelopes(householdId).then((r) => r.data),
+  })
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts', householdId],
+    queryFn: () => getAccounts(householdId).then((r) => r.data),
   })
 
   const { data: aliasesRaw = [] } = useQuery({
@@ -243,6 +249,22 @@ export default function EnvelopeDetail() {
             >
               {envelope.is_protected ? '🔒 Protected' : '🔓 Unprotected'}
             </button>
+            {accounts.length > 0 && (
+              <select
+                value={envelope.funding_account_id ?? ''}
+                onChange={(e) => updateEnvelopeMutation.mutate({ funding_account_id: e.target.value || null })}
+                className={`text-xs rounded-full px-3 py-1 cursor-pointer appearance-none border-0 outline-none transition-colors ${
+                  envelope.funding_account_id ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                }`}
+              >
+                <option value="">— funded by —</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.display_name || `${a.bank_name}${a.account_id ? ` ···${a.account_id.slice(-4)}` : ''}`}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
