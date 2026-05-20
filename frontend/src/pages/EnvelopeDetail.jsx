@@ -7,6 +7,7 @@ import { getEnvelopes, updateEnvelope } from '../api/envelopes'
 import { getAccounts } from '../api/accounts'
 import { getPeriods, createPeriod, updatePeriod } from '../api/periods'
 import { getTransactions, createTransaction, updateTransaction, deleteTransaction, deleteTransfer, deleteSplit } from '../api/transactions'
+import SplitEditor from '../components/SplitEditor'
 import { getPayeeAliases, upsertPayeeAlias, deletePayeeAlias } from '../api/payees'
 import { thisMonth, today, fmt, buildAliasMap, calcBudgetMetrics, txBadgeClass, ENVELOPE_TYPES, accountLabel } from '../utils'
 import InlineTip from '../components/InlineTip'
@@ -35,6 +36,7 @@ export default function EnvelopeDetail() {
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [splittingTxId, setSplittingTxId] = useState(null)
 
   const startEdit = (tx) => {
     setEditingId(tx.id)
@@ -508,13 +510,22 @@ export default function EnvelopeDetail() {
                         {tx.type === 'credit' ? '+' : '-'}{fmt(tx.amount)}
                       </span>
                       {!tx.transfer_id && !tx.split_id && (
-                        <button
-                          onClick={() => startEdit(tx)}
-                          className="text-gray-300 hover:text-indigo-500 transition-colors text-xs"
-                          title="Edit"
-                        >
-                          ✎
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setSplittingTxId((id) => id === tx.id ? null : tx.id)}
+                            className={`text-xs transition-colors ${splittingTxId === tx.id ? 'text-indigo-500' : 'text-gray-300 hover:text-indigo-500'}`}
+                            title="Split"
+                          >
+                            ⊕
+                          </button>
+                          <button
+                            onClick={() => startEdit(tx)}
+                            className="text-gray-300 hover:text-indigo-500 transition-colors text-xs"
+                            title="Edit"
+                          >
+                            ✎
+                          </button>
+                        </>
                       )}
                       {confirmDeleteId === tx.id ? (
                         <>
@@ -542,6 +553,19 @@ export default function EnvelopeDetail() {
                       )}
                     </div>
                   </div>
+                )}
+                {splittingTxId === tx.id && (
+                  <SplitEditor
+                    tx={tx}
+                    envelopes={envelopes}
+                    householdId={householdId}
+                    onClose={() => setSplittingTxId(null)}
+                    onSuccess={() => {
+                      setSplittingTxId(null)
+                      qc.invalidateQueries({ queryKey: ['transactions', householdId, envelopeId] }, { exact: false })
+                      qc.invalidateQueries({ queryKey: ['periods', householdId, envelopeId] })
+                    }}
+                  />
                 )}
               </li>
             ))}
