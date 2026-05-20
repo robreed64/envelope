@@ -87,6 +87,7 @@ export default function Layout({ title, children }) {
             {navLink('/recurring', 'Recurring')}
             {navLink('/reports', 'Reports')}
             {navLink('/import', 'Import')}
+            {navLink('/accounts', 'Accounts')}
             {navLink('/payees', 'Payees')}
             <button
               onClick={() => setSearchOpen(true)}
@@ -130,6 +131,7 @@ export default function Layout({ title, children }) {
             <div className="py-2" onClick={() => setMobileOpen(false)}>{navLink('/recurring', 'Recurring')}</div>
             <div className="py-2" onClick={() => setMobileOpen(false)}>{navLink('/reports', 'Reports')}</div>
             <div className="py-2" onClick={() => setMobileOpen(false)}>{navLink('/import', 'Import')}</div>
+            <div className="py-2" onClick={() => setMobileOpen(false)}>{navLink('/accounts', 'Accounts')}</div>
             <div className="py-2" onClick={() => setMobileOpen(false)}>{navLink('/payees', 'Payees')}</div>
             <div className="py-2" onClick={() => setMobileOpen(false)}>{navLink('/data', 'Data')}</div>
             <div className="py-2" onClick={() => setMobileOpen(false)}>{navLink('/settings', 'Settings')}</div>
