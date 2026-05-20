@@ -6,6 +6,7 @@ import InlineTip from '../components/InlineTip'
 import BankGuide from '../components/BankGuide'
 import { getHouseholds } from '../api/households'
 import { getEnvelopes } from '../api/envelopes'
+import { getAccounts } from '../api/accounts'
 import { previewImport, confirmImport } from '../api/imports'
 import { getPayeeAssignments } from '../api/payees'
 import { thisMonth, shiftMonth, monthLabel, nextMonthOf, fmt } from '../utils'
@@ -15,8 +16,10 @@ export default function Import() {
   const qc = useQueryClient()
   const fileRef = useRef()
   const [dragging, setDragging] = useState(false)
-  const [preview, setPreview] = useState(null)      // ParsedTransaction[]
+  const [preview, setPreview] = useState(null)          // ParsedTransaction[]
   const [parseErrors, setParseErrors] = useState([])
+  const [detectedAccount, setDetectedAccount] = useState(null) // from OFX
+  const [accountName, setAccountName] = useState('')           // for CSV
   const [assignments, setAssignments] = useState({}) // { txId: envelopeId }
   const [selected, setSelected] = useState({})       // { txId: bool }
   const [budgetMonths, setBudgetMonths] = useState({}) // { txId: 'YYYY-MM-DD' | '' }
@@ -37,6 +40,12 @@ export default function Import() {
     enabled: !!household,
   })
 
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts', household?.id],
+    queryFn: () => getAccounts(household.id).then((r) => r.data),
+    enabled: !!household,
+  })
+
   const { data: payeeAssignments = {} } = useQuery({
     queryKey: ['payee-assignments', household?.id],
     queryFn: () => getPayeeAssignments(household.id).then((r) => r.data),
@@ -48,6 +57,8 @@ export default function Import() {
     onSuccess: ({ data }) => {
       setPreview(data.transactions)
       setParseErrors(data.parse_errors ?? [])
+      setDetectedAccount(data.detected_account ?? null)
+      setAccountName('')
       const sel = {}
       const bm = {}
       const autoMap = {}
@@ -76,13 +87,16 @@ export default function Import() {
   })
 
   const confirmMutation = useMutation({
-    mutationFn: (txs) => confirmImport(household.id, txs),
+    mutationFn: ({ txs, csvName }) => confirmImport(household.id, txs, csvName),
     onSuccess: ({ data }) => {
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['periods'] })
       qc.invalidateQueries({ queryKey: ['income'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
       setImportedCount(data.imported)
       setPreview(null)
+      setDetectedAccount(null)
+      setAccountName('')
       setAssignments({})
       setAutoAssigned(new Set())
       setSelected({})
@@ -139,9 +153,11 @@ export default function Import() {
         envelope_id: isIncome ? null : assignments[t.id],
         is_income: isIncome,
         budget_month: isIncome && bm ? bm : undefined,
+        account_id: detectedAccount?.resolved_id ?? undefined,
       }
     })
-    confirmMutation.mutate(txs)
+    const csvName = !detectedAccount && accountName.trim() ? accountName.trim() : undefined
+    confirmMutation.mutate({ txs, csvName })
   }
 
   const descriptionCounts = preview?.reduce((acc, t) => {
@@ -277,6 +293,48 @@ export default function Import() {
             </div>
           )}
 
+          {/* OFX: show detected bank as read-only badge */}
+          {detectedAccount && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4 flex items-center gap-3">
+              <span className="text-indigo-500 text-base">🏦</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-indigo-800 text-sm font-medium">
+                  {detectedAccount.bank_name}
+                  {detectedAccount.account_id && (
+                    <span className="text-indigo-500 font-normal ml-1">···{detectedAccount.account_id.slice(-4)}</span>
+                  )}
+                  {detectedAccount.account_type && (
+                    <span className="ml-2 text-xs bg-indigo-100 text-indigo-600 rounded-full px-2 py-0.5 capitalize">{detectedAccount.account_type}</span>
+                  )}
+                </p>
+                <p className="text-indigo-500 text-xs mt-0.5">Detected from file — transactions will be linked to this account</p>
+              </div>
+            </div>
+          )}
+
+          {/* CSV: require user to name the account */}
+          {!detectedAccount && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 flex items-center gap-3">
+              <span className="text-gray-400 text-base">🏦</span>
+              <div className="flex-1 min-w-0 flex items-center gap-3">
+                <label className="text-sm text-gray-600 whitespace-nowrap">Account name</label>
+                <input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder="e.g. Chase Checking"
+                  list="accounts-list"
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <datalist id="accounts-list">
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.display_name || a.bank_name} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-4">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -291,7 +349,7 @@ export default function Import() {
                 </span>
               </div>
               <button
-                onClick={() => { setPreview(null); setAssignments({}); setAutoAssigned(new Set()); setSelected({}); setBudgetMonths({}); setAutoUncheckedCount(0) }}
+                onClick={() => { setPreview(null); setDetectedAccount(null); setAccountName(''); setAssignments({}); setAutoAssigned(new Set()); setSelected({}); setBudgetMonths({}); setAutoUncheckedCount(0) }}
                 className="text-sm text-gray-400 hover:text-gray-600"
               >
                 Upload different file

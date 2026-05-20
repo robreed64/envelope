@@ -8,5 +8,8 @@ export const previewImport = (householdId, file) => {
   })
 }
 
-export const confirmImport = (householdId, transactions) =>
-  client.post(`/households/${householdId}/import/confirm`, { transactions })
+export const confirmImport = (householdId, transactions, accountName) =>
+  client.post(`/households/${householdId}/import/confirm`, {
+    transactions,
+    account_name: accountName ?? null,
+  })

@@ -17,7 +17,7 @@ export default function Login() {
       if (mode === 'login') await login(email, password)
       else await register(email, password)
     } catch (err) {
-      setError(err.response?.data?.detail ?? 'Something went wrong')
+      setError(err.response?.data?.detail ?? (err.response ? 'Something went wrong' : 'Cannot reach server — is the app running?'))
     } finally {
       setLoading(false)
     }
