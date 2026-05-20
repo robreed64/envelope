@@ -2,7 +2,7 @@ import csv
 import hashlib
 import io
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from dateutil import parser as dateparser
@@ -11,11 +11,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_household_role
 from app.core.database import get_db
+from app.models.account import Account
 from app.models.envelope import Envelope
 from app.models.household import HouseholdMember
 from app.models.income import Income
 from app.models.transaction import Transaction
 from app.schemas.imports import (
+    AccountOut,
+    DetectedAccount,
     ImportConfirmRequest,
     ImportConfirmResponse,
     ImportPreviewResponse,
@@ -23,11 +26,21 @@ from app.schemas.imports import (
 )
 
 router = APIRouter(prefix="/households/{household_id}/import", tags=["import"])
+accounts_router = APIRouter(prefix="/households/{household_id}/accounts", tags=["accounts"])
 
 SUPPORTED_TYPES = {
     "application/octet-stream", "text/csv", "text/plain",
     "application/vnd.ms-excel", "",
 }
+
+
+@accounts_router.get("", response_model=list[AccountOut])
+def list_accounts(
+    household_id: uuid.UUID,
+    _: HouseholdMember = Depends(require_household_role(["owner", "editor", "viewer"])),
+    db: Session = Depends(get_db),
+):
+    return db.query(Account).filter_by(household_id=household_id).order_by(Account.created_at).all()
 
 
 @router.post("/preview", response_model=ImportPreviewResponse)
@@ -42,11 +55,17 @@ async def preview_import(
 
     try:
         if name.endswith(".qfx") or name.endswith(".ofx"):
-            transactions, errors = _parse_ofx(content)
+            transactions, errors, detected_account = _parse_ofx(content)
         else:
-            transactions, errors = _parse_csv(content)
+            transactions, errors, detected_account = _parse_csv(content)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    # for OFX: look up or create the Account record and attach its UUID to the response
+    if detected_account is not None:
+        account = _resolve_account(db, household_id, detected_account)
+        db.commit()
+        detected_account.resolved_id = account.id
 
     # mark transactions already in this household as duplicates
     bank_refs = {t.bank_ref for t in transactions}
@@ -88,7 +107,11 @@ async def preview_import(
             or (tx.type == "credit" and (str(tx.amount), tx_month) in income_amount_months)
         )
 
-    return ImportPreviewResponse(transactions=transactions, parse_errors=errors)
+    return ImportPreviewResponse(
+        transactions=transactions,
+        parse_errors=errors,
+        detected_account=detected_account,
+    )
 
 
 @router.post("/confirm", response_model=ImportConfirmResponse)
@@ -118,6 +141,25 @@ def confirm_import(
                 detail="One or more envelopes do not belong to this household",
             )
 
+    # resolve account_id — use the one from the request if present, else look up/create from account_name
+    resolved_account_id: uuid.UUID | None = None
+    sample_account_id = next((t.account_id for t in body.transactions if t.account_id), None)
+    if sample_account_id:
+        resolved_account_id = sample_account_id
+    elif body.account_name:
+        account = db.query(Account).filter_by(
+            household_id=household_id, bank_name=body.account_name
+        ).first()
+        if not account:
+            account = Account(
+                household_id=household_id,
+                bank_name=body.account_name,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(account)
+            db.flush()
+        resolved_account_id = account.id
+
     # final dedup check on confirm — skip any that snuck in
     existing_expense_refs = {
         row.bank_ref
@@ -136,6 +178,7 @@ def confirm_import(
     for item in tx_items:
         db.add(Transaction(
             envelope_id=item.envelope_id,
+            account_id=resolved_account_id,
             amount=item.amount,
             type=item.type,
             date=item.date,
@@ -181,7 +224,7 @@ def confirm_import(
 # Parsers
 # ---------------------------------------------------------------------------
 
-def _parse_ofx(content: bytes) -> tuple[list[ParsedTransaction], list[str]]:
+def _parse_ofx(content: bytes) -> tuple[list[ParsedTransaction], list[str], DetectedAccount | None]:
     try:
         from ofxparse import OfxParser
     except ImportError:
@@ -189,11 +232,21 @@ def _parse_ofx(content: bytes) -> tuple[list[ParsedTransaction], list[str]]:
 
     transactions: list[ParsedTransaction] = []
     errors: list[str] = []
+    detected_account: DetectedAccount | None = None
 
     try:
         ofx = OfxParser.parse(io.BytesIO(content))
         accounts = ofx.accounts if hasattr(ofx, "accounts") else [ofx.account] if ofx.account else []
         for account in accounts:
+            # extract bank identity from the first account encountered
+            if detected_account is None:
+                institution = getattr(account, "institution", None)
+                detected_account = DetectedAccount(
+                    bank_name=getattr(institution, "organization", None) or "Unknown Bank",
+                    account_id=str(getattr(account, "account_id", "") or "").strip() or None,
+                    account_type=str(getattr(account, "account_type", "") or "").strip().lower() or None,
+                    fid=str(getattr(institution, "fid", "") or "").strip() or None,
+                )
             for tx in account.statement.transactions:
                 try:
                     amount = Decimal(str(tx.amount))
@@ -214,10 +267,10 @@ def _parse_ofx(content: bytes) -> tuple[list[ParsedTransaction], list[str]]:
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Could not parse OFX/QFX file: {e}")
 
-    return transactions, errors
+    return transactions, errors, detected_account
 
 
-def _parse_csv(content: bytes) -> tuple[list[ParsedTransaction], list[str]]:
+def _parse_csv(content: bytes) -> tuple[list[ParsedTransaction], list[str], None]:
     # Decode handling BOM and common encodings
     for encoding in ("utf-8-sig", "utf-8", "latin-1"):
         try:
@@ -291,7 +344,28 @@ def _parse_csv(content: bytes) -> tuple[list[ParsedTransaction], list[str]]:
         except (InvalidOperation, ValueError) as e:
             errors.append(f"Row {i}: {e}")
 
-    return transactions, errors
+    return transactions, errors, None
+
+
+def _resolve_account(db: Session, household_id: uuid.UUID, info: "DetectedAccount") -> Account:
+    """Look up an existing Account by fid (preferred) or bank_name, or create one."""
+    account = None
+    if info.fid:
+        account = db.query(Account).filter_by(household_id=household_id, fid=info.fid).first()
+    if account is None:
+        account = db.query(Account).filter_by(household_id=household_id, bank_name=info.bank_name).first()
+    if account is None:
+        account = Account(
+            household_id=household_id,
+            bank_name=info.bank_name,
+            account_id=info.account_id,
+            account_type=info.account_type,
+            fid=info.fid,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(account)
+        db.flush()
+    return account
 
 
 def _fingerprint(tx_date: date, amount: Decimal, description: str) -> str:

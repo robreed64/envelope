@@ -43,6 +43,7 @@ class SplitCreate(BaseModel):
 class TransactionResponse(BaseModel):
     id: uuid.UUID
     envelope_id: uuid.UUID
+    account_id: uuid.UUID | None
     amount: Decimal
     type: str
     transfer_id: uuid.UUID | None
@@ -58,6 +59,8 @@ class TransactionSearchResult(BaseModel):
     id: uuid.UUID
     envelope_id: uuid.UUID
     envelope_name: str
+    account_id: uuid.UUID | None = None
+    account_name: str | None = None
     amount: Decimal
     type: str
     transfer_id: uuid.UUID | None
