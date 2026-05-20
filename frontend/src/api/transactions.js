@@ -29,6 +29,9 @@ export const deleteSplit = (householdId, splitId) =>
 export const searchTransactions = (householdId, q) =>
   client.get(`/households/${householdId}/transactions/search`, { params: { q } })
 
+export const setTransactionCleared = (householdId, envelopeId, txId, cleared) =>
+  client.patch(`/households/${householdId}/envelopes/${envelopeId}/transactions/${txId}/cleared`, { cleared })
+
 export const exportTransactionsCsv = (householdId, { start, end } = {}) => {
   const params = {}
   if (start) params.start = start
