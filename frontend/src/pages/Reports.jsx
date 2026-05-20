@@ -7,7 +7,7 @@ import Layout from '../components/Layout'
 import { getHouseholds } from '../api/households'
 import { getSpendingReport } from '../api/reports'
 import { exportTransactionsCsv } from '../api/transactions'
-import { fmt, shortMonth, today, triggerDownload } from '../utils'
+import { fmt, shortMonth, today, triggerDownload, ENVELOPE_TYPES } from '../utils'
 
 const RANGE_OPTIONS = [
   { label: '3 months', value: 3 },
@@ -206,7 +206,7 @@ export default function Reports() {
                     {sortedRows.map((row) => (
                       <tr key={row.envelope_id} className="hover:bg-gray-50">
                         <td className="px-5 py-3 font-medium text-gray-800 whitespace-nowrap">
-                          {row.group_name && <span className="text-gray-400 text-xs mr-1">{row.group_name} /</span>}
+                          {row.envelope_type && <span className="text-gray-400 text-xs mr-1">{ENVELOPE_TYPES[row.envelope_type]?.label} /</span>}
                           <span style={{ color: BAR_COLORS[envelopeKeys.indexOf(row.envelope_name) % BAR_COLORS.length] }}>■</span>
                           {' '}{row.envelope_name}
                         </td>
@@ -281,7 +281,7 @@ export default function Reports() {
                         {group.rows.map((row) => (
                           <tr key={row.envelope_id} className="hover:bg-gray-50">
                             <td className="px-5 py-3 font-medium text-gray-800 whitespace-nowrap">
-                              {row.group_name && <span className="text-gray-400 text-xs mr-1">{row.group_name} /</span>}
+                              {row.envelope_type && <span className="text-gray-400 text-xs mr-1">{ENVELOPE_TYPES[row.envelope_type]?.label} /</span>}
                               {row.envelope_name}
                             </td>
                             {row.monthly.map((cell) => {

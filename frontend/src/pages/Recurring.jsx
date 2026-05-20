@@ -6,7 +6,7 @@ import { getHouseholds } from '../api/households'
 import { getEnvelopes } from '../api/envelopes'
 import { getTemplates, getSuggestions, createTemplate, updateTemplate, deleteTemplate, applyTemplate } from '../api/recurring'
 import { getPayeeAliases } from '../api/payees'
-import { today, fmt, buildAliasMap } from '../utils'
+import { today, fmt, buildAliasMap, envelopeLabel } from '../utils'
 
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1)
 const ordinal = (n) => {
@@ -168,7 +168,7 @@ export default function Recurring() {
               >
                 <option value="">Select envelope…</option>
                 {envelopes.map((e) => (
-                  <option key={e.id} value={e.id}>{e.group_name ? `${e.group_name} / ` : ''}{e.name}</option>
+                  <option key={e.id} value={e.id}>{envelopeLabel(e)}</option>
                 ))}
               </select>
             </div>

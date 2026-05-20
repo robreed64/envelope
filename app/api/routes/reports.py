@@ -100,7 +100,7 @@ def spending_report(
             rows.append(SpendingRow(
                 envelope_id=env.id,
                 envelope_name=env.name,
-                group_name=env.group_name,
+                envelope_type=env.envelope_type,
                 monthly=cells,
                 total=total_spent,
             ))

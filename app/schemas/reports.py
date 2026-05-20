@@ -13,7 +13,7 @@ class MonthlyCell(BaseModel):
 class SpendingRow(BaseModel):
     envelope_id: uuid.UUID
     envelope_name: str
-    group_name: str | None
+    envelope_type: str | None
     monthly: list[MonthlyCell]
     total: Decimal
 
