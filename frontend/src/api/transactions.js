@@ -32,6 +32,9 @@ export const searchTransactions = (householdId, q) =>
 export const setTransactionCleared = (householdId, envelopeId, txId, cleared) =>
   client.patch(`/households/${householdId}/envelopes/${envelopeId}/transactions/${txId}/cleared`, { cleared })
 
+export const splitTransaction = (householdId, txId, legs) =>
+  client.post(`/households/${householdId}/transactions/${txId}/split`, { legs })
+
 export const exportTransactionsCsv = (householdId, { start, end } = {}) => {
   const params = {}
   if (start) params.start = start
