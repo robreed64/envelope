@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import auth, backup, envelopes, households, imports, income, invites, me, notifications, payees, periods, recurring, reports, transactions
+from app.api.routes.imports import accounts_router
 from app.core.config import settings
 
 app = FastAPI(title="Envelope Budget API", version="1.0.0")
@@ -33,6 +34,7 @@ app.include_router(recurring.router)
 app.include_router(payees.router)
 app.include_router(reports.router)
 app.include_router(imports.router)
+app.include_router(accounts_router)
 app.include_router(invites.router)
 app.include_router(backup.router)
 app.include_router(notifications.router)

@@ -1,5 +1,6 @@
 from app.models.user import User, RefreshToken
 from app.models.household import Household, HouseholdMember
+from app.models.account import Account
 from app.models.envelope import Envelope
 from app.models.period import Period
 from app.models.transaction import Transaction
@@ -10,6 +11,7 @@ from app.models.payee import PayeeAlias
 __all__ = [
     "User", "RefreshToken",
     "Household", "HouseholdMember",
+    "Account",
     "Envelope", "Period", "Transaction", "Income",
     "RecurringTemplate", "PayeeAlias",
 ]

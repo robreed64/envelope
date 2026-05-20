@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_household_role
 from app.core.database import get_db
+from app.models.account import Account
 from app.models.envelope import Envelope
 from app.models.household import HouseholdMember
 from app.models.income import Income
@@ -234,8 +235,9 @@ def search_transactions(
     db: Session = Depends(get_db),
 ):
     results = (
-        db.query(Transaction, Envelope.name.label("envelope_name"))
+        db.query(Transaction, Envelope.name.label("envelope_name"), Account.bank_name.label("account_name"))
         .join(Envelope, Transaction.envelope_id == Envelope.id)
+        .outerjoin(Account, Transaction.account_id == Account.id)
         .filter(
             Envelope.household_id == household_id,
             Transaction.deleted_at.is_(None),
@@ -250,6 +252,8 @@ def search_transactions(
             id=tx.id,
             envelope_id=tx.envelope_id,
             envelope_name=envelope_name,
+            account_id=tx.account_id,
+            account_name=account_name,
             amount=tx.amount,
             type=tx.type,
             transfer_id=tx.transfer_id,
@@ -257,7 +261,7 @@ def search_transactions(
             date=tx.date,
             note=tx.note,
         )
-        for tx, envelope_name in results
+        for tx, envelope_name, account_name in results
     ]
 
 
