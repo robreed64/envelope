@@ -681,7 +681,7 @@ export default function Dashboard() {
                 >
                   <option value="">— pick from suggestions —</option>
                   {templateGroups.map((group) => (
-                    <optgroup key={group} label={group}>
+                    <optgroup key={group} label={ENVELOPE_TYPES[group]?.label ?? group}>
                       {remainingTemplates.filter((t) => t.group === group).map((t) => (
                         <option key={t.name} value={t.name}>{t.name}</option>
                       ))}
