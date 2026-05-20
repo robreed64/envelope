@@ -25,7 +25,6 @@ const TYPE_DESCRIPTIONS = {
 }
 
 const TEMPLATE_GROUPS = [...new Set(TEMPLATES.map((t) => t.group))]
-const TEMPLATE_GROUP_MAP = Object.fromEntries(TEMPLATES.map((t) => [t.name, t.group]))
 
 const TOTAL_STEPS = 5
 
@@ -124,7 +123,6 @@ export default function SetupWizard({ householdId, onClose }) {
         const allocated = parseFloat(budgets[name]) || 0
         const { data: env } = await createEnvelope(householdId, {
           name,
-          group_name: TEMPLATE_GROUP_MAP[name] || null,
           sort_order: existingEnvelopes.length + i + 1,
           envelope_type: getType(name),
         })
@@ -333,7 +331,7 @@ export default function SetupWizard({ householdId, onClose }) {
               <div className="space-y-4">
                 {TEMPLATE_GROUPS.map((group) => (
                   <div key={group}>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{group}</p>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{ENVELOPE_TYPES[group]?.label ?? group}</p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {TEMPLATES.filter((t) => t.group === group).map((t) => {
                         const alreadyExists = existingNames.has(t.name)
