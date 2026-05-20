@@ -807,6 +807,55 @@ export default function Dashboard() {
         )}
       </div>
 
+      {totalAllocated > 0 && (() => {
+        const TYPE_BAR_COLORS = { needs: '#60a5fa', wants: '#a78bfa', dreams: '#fbbf24', fix: '#fb7185', emergency: '#94a3b8' }
+        const byType = {}
+        for (const env of envelopes) {
+          const t = env.envelope_type
+          if (!t) continue
+          const p = periodByEnvelope[env.id]
+          if (!p) continue
+          if (!byType[t]) byType[t] = { allocated: 0, spent: 0 }
+          byType[t].allocated += parseFloat(p.allocated ?? 0)
+          byType[t].spent += parseFloat(p.spent ?? 0)
+        }
+        const rows = Object.keys(ENVELOPE_TYPES).filter((t) => byType[t]?.allocated > 0 || byType[t]?.spent > 0)
+        if (rows.length === 0) return null
+        return (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Spent vs. Budget by Type</p>
+            <div className="space-y-3">
+              {rows.map((t) => {
+                const { allocated, spent } = byType[t]
+                const pct = allocated > 0 ? Math.min((spent / allocated) * 100, 100) : 100
+                const over = spent > allocated
+                const typeInfo = ENVELOPE_TYPES[t]
+                return (
+                  <div key={t}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-block w-2 h-2 rounded-full ${typeInfo.dot}`} />
+                        <span className="font-medium text-gray-600">{typeInfo.label}</span>
+                      </div>
+                      <div className="tabular-nums">
+                        <span className={over ? 'text-rose-600 font-semibold' : 'text-gray-700'}>{fmt(spent)}</span>
+                        <span className="text-gray-400"> / {fmt(allocated)}</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: over ? '#f43f5e' : TYPE_BAR_COLORS[t] }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       {totalIncome > 0 && envelopes.length > 0 && (
         <div className={`rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-4 ${
           unallocated < 0
