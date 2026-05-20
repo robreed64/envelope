@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_household_role
 from app.core.database import get_db
+from app.models.account import Account
 from app.models.envelope import Envelope
 from app.models.household import Household, HouseholdMember
 from app.models.income import Income
@@ -15,9 +16,10 @@ from app.models.period import Period
 from app.models.recurring import RecurringTemplate
 from app.models.transaction import Transaction
 from app.models.user import User
+
 router = APIRouter(prefix="/households/{household_id}/data", tags=["backup"])
 
-VALID_ITEMS = {"envelopes", "map", "recurring", "income", "transactions", "household"}
+VALID_ITEMS = {"accounts", "envelopes", "map", "recurring", "income", "transactions", "household"}
 
 
 def _parse_items(items: str) -> set[str]:
@@ -33,7 +35,7 @@ def _parse_items(items: str) -> set[str]:
 @router.get("/export")
 def export_backup(
     household_id: uuid.UUID,
-    items: str = "envelopes,map,recurring,income,transactions",
+    items: str = "accounts,envelopes,map,recurring,income,transactions",
     _: HouseholdMember = Depends(require_household_role(["owner", "editor", "viewer"])),
     db: Session = Depends(get_db),
 ):
@@ -52,6 +54,18 @@ def export_backup(
         .all()
     )
     env_map = {e.id: e.name for e in active_envs}
+
+    if "accounts" in chosen:
+        accts = db.query(Account).filter_by(household_id=household_id).order_by(Account.created_at).all()
+        payload["accounts"] = [
+            {
+                "bank_name": a.bank_name,
+                "display_name": a.display_name,
+                "account_type": a.account_type,
+                "account_id": a.account_id,
+            }
+            for a in accts
+        ]
 
     if "envelopes" in chosen:
         env_ids = [e.id for e in active_envs]
@@ -122,9 +136,14 @@ def export_backup(
             .order_by(Transaction.date.desc())
             .all()
         ) if env_map else []
+        acct_id_to_name = {
+            a.id: a.bank_name
+            for a in db.query(Account).filter_by(household_id=household_id).all()
+        } if all_txs else {}
         payload["transactions"] = [
             {
                 "envelope_name": env_map[tx.envelope_id],
+                "account_name": acct_id_to_name.get(tx.account_id) if tx.account_id else None,
                 "amount": float(tx.amount),
                 "type": tx.type,
                 "date": tx.date.isoformat(),
@@ -166,6 +185,14 @@ def delete_data(
         current_user.wizard_skipped = False
         db.commit()
         return
+
+    if "accounts" in chosen:
+        env_ids_all = [e.id for e in db.query(Envelope.id).filter_by(household_id=household_id).all()]
+        if env_ids_all:
+            db.query(Transaction).filter(Transaction.envelope_id.in_(env_ids_all)).update(
+                {"account_id": None}, synchronize_session=False
+            )
+        db.query(Account).filter_by(household_id=household_id).delete(synchronize_session=False)
 
     if "transactions" in chosen and "envelopes" not in chosen:
         env_ids = [e.id for e in db.query(Envelope.id).filter_by(household_id=household_id, is_active=True).all()]
@@ -210,6 +237,30 @@ def restore_backup(
         e.name: e.id
         for e in db.query(Envelope).filter_by(household_id=household_id, is_active=True).all()
     }
+
+    account_name_map = {
+        a.bank_name: a.id
+        for a in db.query(Account).filter_by(household_id=household_id).all()
+    }
+
+    if "accounts" in chosen and "accounts" in body:
+        created = 0
+        for item in body.get("accounts", []):
+            bank_name = item.get("bank_name", "").strip()
+            if not bank_name or bank_name in account_name_map:
+                continue
+            acct = Account(
+                household_id=household_id,
+                bank_name=bank_name,
+                display_name=item.get("display_name"),
+                account_type=item.get("account_type"),
+                account_id=item.get("account_id"),
+            )
+            db.add(acct)
+            db.flush()
+            account_name_map[bank_name] = acct.id
+            created += 1
+        stats["accounts"] = created
 
     if "map" in chosen and "map" in body:
         m = body["map"]
@@ -275,11 +326,11 @@ def restore_backup(
             if inc.bank_ref:
                 existing_income.add(('ref', inc.bank_ref))
             else:
-                existing_income.add(('c', str(inc.amount), inc.source, inc.date.isoformat(), inc.month.isoformat()))
+                existing_income.add(('c', float(inc.amount), inc.source, inc.date.isoformat(), inc.month.isoformat()))
         created = 0
         for item in body.get("income", []):
             ref = item.get("bank_ref")
-            key = ('ref', ref) if ref else ('c', str(item["amount"]), item.get("source", ""), item["date"], item["month"])
+            key = ('ref', ref) if ref else ('c', float(item["amount"]), item.get("source", ""), item["date"], item["month"])
             if key in existing_income:
                 continue
             existing_income.add(key)
@@ -308,7 +359,7 @@ def restore_backup(
                 if t.bank_ref:
                     existing_tx.add(('ref', t.bank_ref))
                 else:
-                    existing_tx.add(('c', str(t.amount), t.type, t.date.isoformat(), t.note or '', env_name))
+                    existing_tx.add(('c', float(t.amount), t.type, t.date.isoformat(), t.note or '', env_name))
         created = 0
         transfer_id_remap = {}
         split_id_remap = {}
@@ -317,7 +368,7 @@ def restore_backup(
             if env_name not in env_name_map:
                 continue
             ref = item.get("bank_ref")
-            key = ('ref', ref) if ref else ('c', str(item["amount"]), item["type"], item["date"], item.get("note") or '', env_name)
+            key = ('ref', ref) if ref else ('c', float(item["amount"]), item["type"], item["date"], item.get("note") or '', env_name)
             if key in existing_tx:
                 continue
             existing_tx.add(key)
@@ -333,8 +384,10 @@ def restore_backup(
                 if old_sid not in split_id_remap:
                     split_id_remap[old_sid] = uuid.uuid4()
                 new_sid = split_id_remap[old_sid]
+            acct_name = item.get("account_name")
             db.add(Transaction(
                 envelope_id=env_name_map[env_name],
+                account_id=account_name_map.get(acct_name) if acct_name else None,
                 amount=item["amount"],
                 type=item["type"],
                 date=date.fromisoformat(item["date"]),

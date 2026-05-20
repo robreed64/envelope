@@ -8,6 +8,13 @@ import { triggerDownload } from '../utils'
 
 const ITEMS = [
   {
+    key: 'accounts',
+    label: 'Bank accounts',
+    desc: 'Account names, types, and last-four digits',
+    icon: '🏦',
+    warn: 'Deleting accounts removes the account link from all transactions.',
+  },
+  {
     key: 'envelopes',
     label: 'Envelopes & budgets',
     desc: 'Envelope definitions, types, rollover settings, and monthly allocations',
