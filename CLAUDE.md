@@ -63,6 +63,7 @@ uvicorn app.main:app --reload --port 8000
 alembic upgrade head                          # apply all migrations
 alembic revision --autogenerate -m "message"  # generate new migration from model changes
 ```
+`alembic/env.py` reads `DATABASE_URL` from the environment first, so both commands can be run from the host (not just inside the Docker network) by prefixing with the test/dev `DATABASE_URL`.
 
 ### Frontend
 ```bash
@@ -78,6 +79,10 @@ npm run build    # output to frontend/dist/ (served by FastAPI in production)
 DATABASE_URL=postgresql://envelope_user:password@localhost:5432/envelope_test_db \
 SECRET_KEY=test-secret \
 pytest --tb=short
+
+# run a single test file or test by name
+pytest tests/test_transactions.py --tb=short
+pytest tests/test_transactions.py -k "test_create" --tb=short
 ```
 Test DB is separate from dev DB. `conftest.py` creates/drops all tables once per session and truncates before each test.
 
@@ -159,3 +164,4 @@ Test DB is separate from dev DB. `conftest.py` creates/drops all tables once per
 | Transfer | Moving money between two envelopes (debit + credit pair linked by `transfer_id`) |
 | Split | One payment divided across multiple envelopes (linked by `split_id`) |
 | Bank ref | Unique transaction ID from bank file import — prevents duplicate imports |
+| Account | A bank account (checking/savings/credit) belonging to a household; OFX imports auto-detect via `fid` + institution name, CSV imports prompt the user to name it |

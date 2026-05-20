@@ -12,6 +12,7 @@ import IncomePage from './pages/IncomePage'
 import Settings from './pages/Settings'
 import DataManagement from './pages/DataManagement'
 import Payees from './pages/Payees'
+import Accounts from './pages/Accounts'
 const Reports = lazy(() => import('./pages/Reports'))
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/data" element={<DataManagement />} />
           <Route path="/payees" element={<Payees />} />
+          <Route path="/accounts" element={<Accounts />} />
           <Route path="/reports" element={<Suspense fallback={null}><Reports /></Suspense>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
