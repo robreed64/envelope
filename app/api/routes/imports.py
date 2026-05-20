@@ -17,6 +17,7 @@ from app.models.household import HouseholdMember
 from app.models.income import Income
 from app.models.transaction import Transaction
 from app.schemas.imports import (
+    AccountCreate,
     AccountOut,
     DetectedAccount,
     ImportConfirmRequest,
@@ -41,6 +42,20 @@ def list_accounts(
     db: Session = Depends(get_db),
 ):
     return db.query(Account).filter_by(household_id=household_id).order_by(Account.created_at).all()
+
+
+@accounts_router.post("", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
+def create_account(
+    household_id: uuid.UUID,
+    body: AccountCreate,
+    _: HouseholdMember = Depends(require_household_role(["owner", "editor"])),
+    db: Session = Depends(get_db),
+):
+    account = Account(household_id=household_id, **body.model_dump())
+    db.add(account)
+    db.commit()
+    db.refresh(account)
+    return account
 
 
 @router.post("/preview", response_model=ImportPreviewResponse)

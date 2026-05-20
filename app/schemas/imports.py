@@ -52,6 +52,13 @@ class ImportConfirmResponse(BaseModel):
     income_recorded: int
 
 
+class AccountCreate(BaseModel):
+    bank_name: str
+    display_name: str | None = None
+    account_type: str | None = None
+    account_id: str | None = None
+
+
 class AccountOut(BaseModel):
     id: uuid.UUID
     bank_name: str

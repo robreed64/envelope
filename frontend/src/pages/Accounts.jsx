@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Layout from '../components/Layout'
 import { getHouseholds } from '../api/households'
-import { getAccounts, getAccountTransactions } from '../api/accounts'
+import { getAccounts, createAccount, getAccountTransactions } from '../api/accounts'
 import { setTransactionCleared } from '../api/transactions'
 import { fmt } from '../utils'
+
+const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'investment']
 
 function accountLabel(a) {
   if (a.display_name) return a.display_name
@@ -17,9 +19,97 @@ function diff(cleared, target) {
   return Math.round((parseFloat(target) - cleared) * 100) / 100
 }
 
+function AddAccountForm({ householdId, onClose }) {
+  const qc = useQueryClient()
+  const [bankName, setBankName] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [accountType, setAccountType] = useState('')
+  const [lastFour, setLastFour] = useState('')
+
+  const createMutation = useMutation({
+    mutationFn: (data) => createAccount(householdId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts', householdId] })
+      onClose()
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!bankName.trim()) return
+    createMutation.mutate({
+      bank_name: bankName.trim(),
+      display_name: displayName.trim() || null,
+      account_type: accountType || null,
+      account_id: lastFour.trim() || null,
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-indigo-200 p-4 mb-5">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">New account</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Bank name <span className="text-rose-400">*</span></label>
+          <input
+            value={bankName}
+            onChange={(e) => setBankName(e.target.value)}
+            placeholder="e.g. Chase, Ally"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Display name</label>
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="e.g. Chase Checking"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Account type</label>
+          <select
+            value={accountType}
+            onChange={(e) => setAccountType(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">— optional —</option>
+            {ACCOUNT_TYPES.map((t) => (
+              <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Last 4 digits</label>
+          <input
+            value={lastFour}
+            onChange={(e) => setLastFour(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            placeholder="optional"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={!bankName.trim() || createMutation.isPending}
+          className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {createMutation.isPending ? 'Saving…' : 'Add account'}
+        </button>
+        <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2">
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export default function Accounts() {
   const qc = useQueryClient()
   const [selectedId, setSelectedId] = useState(null)
+  const [showForm, setShowForm] = useState(false)
   const [reconciling, setReconciling] = useState(false)
   const [statementBalance, setStatementBalance] = useState('')
 
@@ -59,7 +149,6 @@ export default function Accounts() {
   if (selectedId && selected) {
     const totalSpent = transactions.filter((t) => t.type === 'debit').reduce((s, t) => s + parseFloat(t.amount), 0)
     const totalReceived = transactions.filter((t) => t.type === 'credit').reduce((s, t) => s + parseFloat(t.amount), 0)
-
     const clearedDebits = transactions.filter((t) => t.cleared && t.type === 'debit').reduce((s, t) => s + parseFloat(t.amount), 0)
     const clearedCredits = transactions.filter((t) => t.cleared && t.type === 'credit').reduce((s, t) => s + parseFloat(t.amount), 0)
     const clearedBalance = clearedCredits - clearedDebits
@@ -141,7 +230,7 @@ export default function Accounts() {
         {loadingTx ? (
           <div className="text-sm text-gray-400">Loading…</div>
         ) : transactions.length === 0 ? (
-          <div className="text-sm text-gray-400">No transactions for this account.</div>
+          <div className="text-sm text-gray-400">No transactions for this account yet.</div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
             {transactions.map((tx) => (
@@ -179,11 +268,27 @@ export default function Accounts() {
 
   return (
     <Layout title="Accounts">
+      {showForm && household && (
+        <AddAccountForm householdId={household.id} onClose={() => setShowForm(false)} />
+      )}
+
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm text-gray-500">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
+        {!showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="text-sm bg-indigo-600 text-white rounded-lg px-3 py-1.5 hover:bg-indigo-700"
+          >
+            + Add account
+          </button>
+        )}
+      </div>
+
       {loadingAccounts ? (
         <div className="text-sm text-gray-400">Loading…</div>
-      ) : accounts.length === 0 ? (
+      ) : accounts.length === 0 && !showForm ? (
         <div className="text-sm text-gray-400">
-          No accounts yet. Import an OFX/QFX file or a CSV to create one.
+          No accounts yet. Add one manually or import an OFX/QFX or CSV file.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
