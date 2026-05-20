@@ -229,24 +229,28 @@ def delete_split(
 @search_router.get("/search", response_model=list[TransactionSearchResult])
 def search_transactions(
     household_id: uuid.UUID,
-    q: str = Query(default="", min_length=1),
-    limit: int = Query(default=50, le=200),
+    q: str = Query(default=""),
+    account_id: uuid.UUID | None = Query(default=None),
+    limit: int = Query(default=50, le=500),
     _: HouseholdMember = Depends(require_household_role(["owner", "editor", "viewer"])),
     db: Session = Depends(get_db),
 ):
-    results = (
+    if not q and account_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide q or account_id")
+    base = (
         db.query(Transaction, Envelope.name.label("envelope_name"), Account.bank_name.label("account_name"))
         .join(Envelope, Transaction.envelope_id == Envelope.id)
         .outerjoin(Account, Transaction.account_id == Account.id)
         .filter(
             Envelope.household_id == household_id,
             Transaction.deleted_at.is_(None),
-            func.lower(Transaction.note).contains(q.lower()),
         )
-        .order_by(Transaction.date.desc())
-        .limit(limit)
-        .all()
     )
+    if q:
+        base = base.filter(func.lower(Transaction.note).contains(q.lower()))
+    if account_id is not None:
+        base = base.filter(Transaction.account_id == account_id)
+    results = base.order_by(Transaction.date.desc()).limit(limit).all()
     return [
         TransactionSearchResult(
             id=tx.id,
