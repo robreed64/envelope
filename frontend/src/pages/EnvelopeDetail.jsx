@@ -8,7 +8,7 @@ import { getAccounts } from '../api/accounts'
 import { getPeriods, createPeriod, updatePeriod } from '../api/periods'
 import { getTransactions, createTransaction, updateTransaction, deleteTransaction, deleteTransfer, deleteSplit } from '../api/transactions'
 import { getPayeeAliases, upsertPayeeAlias, deletePayeeAlias } from '../api/payees'
-import { thisMonth, today, fmt, buildAliasMap, calcBudgetMetrics, txBadgeClass, ENVELOPE_TYPES } from '../utils'
+import { thisMonth, today, fmt, buildAliasMap, calcBudgetMetrics, txBadgeClass, ENVELOPE_TYPES, accountLabel } from '../utils'
 import InlineTip from '../components/InlineTip'
 
 export default function EnvelopeDetail() {
@@ -260,7 +260,7 @@ export default function EnvelopeDetail() {
                 <option value="">— funded by —</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.display_name || `${a.bank_name}${a.account_id ? ` ···${a.account_id.slice(-4)}` : ''}`}
+                    {accountLabel(a)}
                   </option>
                 ))}
               </select>

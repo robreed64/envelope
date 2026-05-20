@@ -16,7 +16,7 @@ from app.models.household import HouseholdMember
 from app.models.income import Income
 from app.models.payee import PayeeAlias
 from app.models.transaction import Transaction
-from app.schemas.transaction import ClearTransaction, TransactionCreate, TransactionResponse, TransactionSearchResult, TransactionUpdate, TransferCreate, SplitCreate
+from app.schemas.transaction import ClearTransaction, TransactionCreate, TransactionResponse, TransactionSearchResult, TransactionUpdate, TransferCreate, SplitCreate, SplitTransactionRequest
 
 router = APIRouter(prefix="/households/{household_id}/envelopes/{envelope_id}/transactions", tags=["transactions"])
 transfer_router = APIRouter(prefix="/households/{household_id}/transfers", tags=["transactions"])
@@ -286,6 +286,65 @@ def search_transactions(
         )
         for tx, envelope_name, account_name in results
     ]
+
+
+@search_router.post("/{transaction_id}/split", response_model=list[TransactionResponse], status_code=status.HTTP_201_CREATED)
+def split_transaction(
+    household_id: uuid.UUID,
+    transaction_id: uuid.UUID,
+    body: SplitTransactionRequest,
+    _: HouseholdMember = Depends(require_household_role(["owner", "editor"])),
+    db: Session = Depends(get_db),
+):
+    tx = (
+        db.query(Transaction)
+        .join(Envelope, Transaction.envelope_id == Envelope.id)
+        .filter(
+            Transaction.id == transaction_id,
+            Envelope.household_id == household_id,
+            Transaction.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not tx:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
+    if tx.split_id is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Transaction is already part of a split")
+    if len(body.legs) < 2:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A split requires at least 2 legs")
+
+    total_legs = sum(leg.amount for leg in body.legs)
+    if total_legs != tx.amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Split amounts ({total_legs}) must equal transaction amount ({tx.amount})",
+        )
+
+    for leg in body.legs:
+        _assert_envelope_belongs(db, leg.envelope_id, household_id)
+
+    split_id = uuid.uuid4()
+    tx.deleted_at = datetime.now(timezone.utc)
+
+    new_legs = [
+        Transaction(
+            envelope_id=leg.envelope_id,
+            amount=leg.amount,
+            type=tx.type,
+            date=tx.date,
+            note=leg.note if leg.note is not None else tx.note,
+            split_id=split_id,
+            account_id=tx.account_id,
+            cleared=tx.cleared,
+            bank_ref=tx.bank_ref if i == 0 else None,
+        )
+        for i, leg in enumerate(body.legs)
+    ]
+    db.add_all(new_legs)
+    db.commit()
+    for leg in new_legs:
+        db.refresh(leg)
+    return new_legs
 
 
 @search_router.get("/export")

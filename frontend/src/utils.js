@@ -37,6 +37,12 @@ export const shiftMonth = (monthStr, delta) => {
 
 export const fmt = (amount) => `$${parseFloat(amount).toFixed(2)}`
 
+export const accountLabel = (a) => {
+  if (a.display_name) return a.display_name
+  const suffix = a.account_id ? ` ···${a.account_id.slice(-4)}` : ''
+  return `${a.bank_name}${suffix}`
+}
+
 export const buildAliasMap = (aliases) =>
   Object.fromEntries(aliases.map((a) => [a.raw, a.alias]))
 

@@ -40,6 +40,10 @@ class SplitCreate(BaseModel):
     legs: list[SplitLeg]
 
 
+class SplitTransactionRequest(BaseModel):
+    legs: list[SplitLeg]
+
+
 class TransactionResponse(BaseModel):
     id: uuid.UUID
     envelope_id: uuid.UUID
