@@ -16,7 +16,7 @@ from app.models.household import HouseholdMember
 from app.models.income import Income
 from app.models.payee import PayeeAlias
 from app.models.transaction import Transaction
-from app.schemas.transaction import TransactionCreate, TransactionResponse, TransactionSearchResult, TransactionUpdate, TransferCreate, SplitCreate
+from app.schemas.transaction import ClearTransaction, TransactionCreate, TransactionResponse, TransactionSearchResult, TransactionUpdate, TransferCreate, SplitCreate
 
 router = APIRouter(prefix="/households/{household_id}/envelopes/{envelope_id}/transactions", tags=["transactions"])
 transfer_router = APIRouter(prefix="/households/{household_id}/transfers", tags=["transactions"])
@@ -107,6 +107,24 @@ def delete_transaction(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
     tx.deleted_at = datetime.now(timezone.utc)
     db.commit()
+
+
+@router.patch("/{transaction_id}/cleared", response_model=TransactionResponse)
+def set_cleared(
+    household_id: uuid.UUID,
+    envelope_id: uuid.UUID,
+    transaction_id: uuid.UUID,
+    body: ClearTransaction,
+    _: HouseholdMember = Depends(require_household_role(["owner", "editor"])),
+    db: Session = Depends(get_db),
+):
+    tx = db.query(Transaction).filter_by(id=transaction_id, envelope_id=envelope_id).first()
+    if not tx or tx.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
+    tx.cleared = body.cleared
+    db.commit()
+    db.refresh(tx)
+    return tx
 
 
 @transfer_router.post("", response_model=list[TransactionResponse], status_code=status.HTTP_201_CREATED)
@@ -264,6 +282,7 @@ def search_transactions(
             split_id=tx.split_id,
             date=tx.date,
             note=tx.note,
+            cleared=tx.cleared,
         )
         for tx, envelope_name, account_name in results
     ]
