@@ -52,8 +52,8 @@ def update_envelope(
     db: Session = Depends(get_db),
 ):
     envelope = _get_envelope(db, envelope_id, household_id)
-    for field, value in body.model_dump(exclude_none=True).items():
-        setattr(envelope, field, value)
+    for field in body.model_fields_set:
+        setattr(envelope, field, getattr(body, field))
     db.commit()
     db.refresh(envelope)
     return envelope

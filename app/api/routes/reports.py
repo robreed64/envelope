@@ -4,15 +4,16 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, case
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.api.deps import require_household_role
 from app.core.database import get_db
+from app.models.account import Account
 from app.models.envelope import Envelope
 from app.models.household import HouseholdMember
 from app.models.period import Period
 from app.models.transaction import Transaction
-from app.schemas.reports import SpendingReport, SpendingRow, MonthlyCell
+from app.schemas.reports import AccountGroup, SpendingReport, SpendingRow, MonthlyCell
 
 router = APIRouter(prefix="/households/{household_id}/reports", tags=["reports"])
 
@@ -30,10 +31,8 @@ def spending_report(
         date((base - i) // 12, (base - i) % 12 + 1, 1)
         for i in range(months - 1, -1, -1)
     ]
-
     cutoff = month_starts[0]
 
-    # Spending per envelope per month (from transactions, excluding transfers)
     spent_rows = (
         db.query(
             func.date_trunc("month", Transaction.date).label("month"),
@@ -55,7 +54,6 @@ def spending_report(
         .all()
     )
 
-    # Allocated per envelope per month (from periods)
     alloc_rows = (
         db.query(Period.month, Period.envelope_id, Period.allocated)
         .join(Envelope, Period.envelope_id == Envelope.id)
@@ -67,7 +65,6 @@ def spending_report(
         .all()
     )
 
-    # Index by (envelope_id, month_str)
     spent_map: dict[tuple, Decimal] = {}
     for r in spent_rows:
         key = (r.envelope_id, r.month.date().replace(day=1))
@@ -85,6 +82,7 @@ def spending_report(
         .all()
     )
 
+    # Build per-envelope spending rows
     rows = []
     for env in envelopes:
         cells = []
@@ -97,11 +95,7 @@ def spending_report(
             total_spent += spent
             if spent or allocated:
                 has_data = True
-            cells.append(MonthlyCell(
-                month=ms.isoformat(),
-                spent=spent,
-                allocated=allocated,
-            ))
+            cells.append(MonthlyCell(month=ms.isoformat(), spent=spent, allocated=allocated))
         if has_data:
             rows.append(SpendingRow(
                 envelope_id=env.id,
@@ -111,5 +105,46 @@ def spending_report(
                 total=total_spent,
             ))
 
+    # Build account groups — group envelopes by their funding_account_id
+    account_map: dict[uuid.UUID, Account] = {
+        a.id: a for a in db.query(Account).filter_by(household_id=household_id).all()
+    }
+    env_account: dict[uuid.UUID, uuid.UUID | None] = {
+        env.id: env.funding_account_id for env in envelopes
+    }
+
+    # Collect unique account keys preserving order: assigned accounts first, then None
+    seen: list[uuid.UUID | None] = []
+    for env in envelopes:
+        key = env.funding_account_id
+        if key not in seen:
+            seen.append(key)
+    if None not in seen:
+        seen.append(None)
+
+    row_by_envelope = {r.envelope_id: r for r in rows}
+
+    account_groups = []
+    for acct_id in seen:
+        group_rows = [
+            row_by_envelope[env.id]
+            for env in envelopes
+            if env.funding_account_id == acct_id and env.id in row_by_envelope
+        ]
+        if not group_rows:
+            continue
+        monthly_totals = [
+            sum(Decimal(str(r.monthly[i].spent)) for r in group_rows)
+            for i in range(len(month_starts))
+        ]
+        acct = account_map.get(acct_id) if acct_id else None
+        account_groups.append(AccountGroup(
+            account_id=acct_id,
+            account_name=acct.display_name or acct.bank_name if acct else None,
+            rows=group_rows,
+            monthly_totals=monthly_totals,
+            total=sum(r.total for r in group_rows),
+        ))
+
     month_labels = [ms.isoformat() for ms in month_starts]
-    return SpendingReport(months=month_labels, rows=rows)
+    return SpendingReport(months=month_labels, rows=rows, account_groups=account_groups)
