@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,7 @@ class Transaction(Base):
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     bank_ref: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    cleared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

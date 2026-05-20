@@ -50,9 +50,14 @@ class TransactionResponse(BaseModel):
     split_id: uuid.UUID | None
     date: date
     note: str | None
+    cleared: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ClearTransaction(BaseModel):
+    cleared: bool
 
 
 class TransactionSearchResult(BaseModel):
@@ -67,3 +72,4 @@ class TransactionSearchResult(BaseModel):
     split_id: uuid.UUID | None
     date: date
     note: str | None
+    cleared: bool = False
