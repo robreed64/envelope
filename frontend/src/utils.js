@@ -12,8 +12,10 @@ export const monthLabel = (date = new Date()) =>
 export const monthLabelStr = (monthStr) =>
   monthLabel(new Date(monthStr + 'T00:00:00'))
 
-export const envelopeLabel = (e) =>
-  e.group_name ? `${e.group_name} / ${e.name}` : e.name
+export const envelopeLabel = (e) => {
+  const typeLabel = e.envelope_type ? ENVELOPE_TYPES[e.envelope_type]?.label : null
+  return typeLabel ? `${typeLabel} / ${e.name}` : e.name
+}
 
 export const shortMonth = (isoStr) => {
   const d = new Date(isoStr + 'T00:00:00')
