@@ -15,6 +15,7 @@ class Transaction(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     envelope_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("envelopes.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     type: Mapped[str] = mapped_column(TransactionType, nullable=False)
     # links the debit + credit pair for a transfer
@@ -27,3 +28,4 @@ class Transaction(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     envelope: Mapped["Envelope"] = relationship(back_populates="transactions")
+    account: Mapped["Account"] = relationship(back_populates="transactions")
