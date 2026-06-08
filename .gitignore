@@ -2,6 +2,7 @@
 .env
 
 # Python
+.venv/
 venv/
 myenv/
 __pycache__/
@@ -41,3 +42,5 @@ last things
 things to work on
 web based software
 claude code examples
+.vercel
+.env*
