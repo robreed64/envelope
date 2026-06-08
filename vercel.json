@@ -1,9 +1,6 @@
 {
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
-  "functions": {
-    "api/index.py": { "maxDuration": 300 }
-  },
   "rewrites": [
     { "source": "/auth/:path*", "destination": "/api/index.py" },
     { "source": "/me", "destination": "/api/index.py" },
