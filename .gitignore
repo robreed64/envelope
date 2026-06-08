@@ -1,0 +1,43 @@
+# Secrets — never commit
+.env
+
+# Python
+venv/
+myenv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Database
+*.db
+*.sqlite3
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code internals
+.claude/
+
+# Personal notes (not source code)
+tara notes
+money habit
+envelope_things_to_remember
+last things
+things to work on
+web based software
+claude code examples
